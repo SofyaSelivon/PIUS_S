@@ -1,14 +1,20 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem
 from app.models.user import User
 
 
-def get_orders_with_stats(db: Session, market_id, status=None, page: int = 1, limit: int = 10):
+async def get_orders_with_stats(
+        db: AsyncSession,
+        market_id,
+        status=None,
+        page: int = 1,
+        limit: int = 10
+):
 
     query = (
-        db.query(
+        select(
             Order,
             func.count(OrderItem.id).label("itemsCount"),
             User.userId,
@@ -19,45 +25,70 @@ def get_orders_with_stats(db: Session, market_id, status=None, page: int = 1, li
         )
         .join(User, User.userId == Order.userId)
         .outerjoin(OrderItem, OrderItem.orderId == Order.id)
-        .filter(Order.marketId == market_id, Order.deletedAt.is_(None))
+        .where(
+            Order.marketId == market_id,
+            Order.deletedAt.is_(None)
+        )
         .group_by(Order.id, User.userId)
     )
 
     if status:
-        query = query.filter(Order.status == status)
+        query = query.where(Order.status == status)
 
-    total_orders = db.query(func.count(Order.id)).filter(
-        Order.marketId == market_id,
-        Order.deletedAt.is_(None)
+    total_orders = (
+        await db.execute(
+            select(func.count(Order.id)).where(
+                Order.marketId == market_id,
+                Order.deletedAt.is_(None)
+            )
+        )
     ).scalar()
 
-    total_revenue = db.query(
-        func.coalesce(func.sum(Order.totalAmount), 0)
-    ).filter(
-        Order.marketId == market_id,
-        Order.status != OrderStatus.cancelled,
-        Order.deletedAt.is_(None)
+    total_revenue = (
+        await db.execute(
+            select(func.coalesce(func.sum(Order.totalAmount), 0)).where(
+                Order.marketId == market_id,
+                Order.status != OrderStatus.cancelled,
+                Order.deletedAt.is_(None)
+            )
+        )
     ).scalar()
 
-    completed_orders = db.query(func.count(Order.id)).filter(
-        Order.marketId == market_id,
-        Order.status == OrderStatus.completed,
-        Order.deletedAt.is_(None)
+    completed_orders = (
+        await db.execute(
+            select(func.count(Order.id)).where(
+                Order.marketId == market_id,
+                Order.status == OrderStatus.completed,
+                Order.deletedAt.is_(None)
+            )
+        )
     ).scalar()
 
-    processing_orders = db.query(func.count(Order.id)).filter(
-        Order.marketId == market_id,
-        Order.status.in_([OrderStatus.processing, OrderStatus.shipped]),
-        Order.deletedAt.is_(None)
+    processing_orders = (
+        await db.execute(
+            select(func.count(Order.id)).where(
+                Order.marketId == market_id,
+                Order.status.in_([OrderStatus.processing, OrderStatus.shipped]),
+                Order.deletedAt.is_(None)
+            )
+        )
     ).scalar()
 
-    pending_orders = db.query(func.count(Order.id)).filter(
-        Order.marketId == market_id,
-        Order.status == OrderStatus.pending,
-        Order.deletedAt.is_(None)
+    pending_orders = (
+        await db.execute(
+            select(func.count(Order.id)).where(
+                Order.marketId == market_id,
+                Order.status == OrderStatus.pending,
+                Order.deletedAt.is_(None)
+            )
+        )
     ).scalar()
 
-    rows = query.offset((page - 1) * limit).limit(limit).all()
+    result = await db.execute(
+        query.offset((page - 1) * limit).limit(limit)
+    )
+
+    rows = result.all()
 
     orders = []
 
@@ -98,13 +129,13 @@ def get_orders_with_stats(db: Session, market_id, status=None, page: int = 1, li
     }
 
 
-def update_order_status(db: Session, order: Order, new_status: OrderStatus):
+async def update_order_status(db: AsyncSession, order: Order, new_status: OrderStatus):
     order.status = new_status
-    db.commit()
+    await db.commit()
     return True
 
 
-def soft_delete_order(db: Session, order: Order):
+async def soft_delete_order(db: AsyncSession, order: Order):
     order.deletedAt = func.now()
-    db.commit()
+    await db.commit()
     return True

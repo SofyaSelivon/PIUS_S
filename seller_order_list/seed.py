@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy.orm import Session
+import asyncio
 
-from app.database.session import engine, SessionLocal
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.session import engine, AsyncSessionLocal
 from app.database.base import Base
 
 from app.models.user import User
@@ -13,183 +16,196 @@ from app.models.order_item import OrderItem
 from app.enums.product_category import ProductCategory
 
 
-def seed():
+async def seed():
 
     print("Creating tables if not exist...")
-    Base.metadata.create_all(bind=engine)
 
-    db: Session = SessionLocal()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-    print("Cleaning database...")
+    async with AsyncSessionLocal() as db:
 
-    db.query(OrderItem).delete()
-    db.query(Order).delete()
-    db.query(Product).delete()
-    db.query(Market).delete()
-    db.query(User).delete()
+        print("Cleaning database...")
 
-    db.commit()
+        await db.execute(delete(OrderItem))
+        await db.execute(delete(Order))
+        await db.execute(delete(Product))
+        await db.execute(delete(Market))
+        await db.execute(delete(User))
 
-    print("Creating users...")
+        await db.commit()
 
-    seller_id = uuid.UUID("9ba4ee01-186e-48a8-a638-a6804d4def84")
-    buyer_id = uuid.uuid4()
+        print("Creating users...")
 
-    seller = User(
-        userId=seller_id,
-        login="seller",
-        passwordHash="123",
-        firstName="Ivan",
-        lastName="Petrov",
-        patronymic="Ivanovich",
-        city="Amsterdam",
-        telegram="@seller_test",
-        telegramChatId="12345678",
-        isSeller=True
-    )
+        seller_id = uuid.UUID("9ba4ee01-186e-48a8-a638-a6804d4def84")
+        buyer_id = uuid.uuid4()
 
-    buyer = User(
-        userId=buyer_id,
-        login="buyer",
-        passwordHash="123",
-        firstName="Anna",
-        lastName="Ivanova",
-        patronymic="Sergeevna",
-        city="Amsterdam",
-        telegram="@buyer_test",
-        telegramChatId="87654321",
-        isSeller=False
-    )
+        seller = User(
+            userId=seller_id,
+            login="seller",
+            passwordHash="123",
+            firstName="Ivan",
+            lastName="Petrov",
+            patronymic="Ivanovich",
+            city="Amsterdam",
+            telegram="@seller_test",
+            telegramChatId="12345678",
+            isSeller=True
+        )
 
-    db.add_all([seller, buyer])
-    db.commit()
+        buyer = User(
+            userId=buyer_id,
+            login="buyer",
+            passwordHash="123",
+            firstName="Anna",
+            lastName="Ivanova",
+            patronymic="Sergeevna",
+            city="Amsterdam",
+            telegram="@buyer_test",
+            telegramChatId="87654321",
+            isSeller=False
+        )
 
-    print("Creating market...")
+        db.add_all([seller, buyer])
+        await db.commit()
 
-    market = Market(
-        userId=seller_id,
-        marketName="Electronics Store",
-        description="Test electronics marketplace"
-    )
+        print("Creating market...")
 
-    db.add(market)
-    db.commit()
+        market = Market(
+            userId=seller_id,
+            marketName="Electronics Store",
+            description="Test electronics marketplace"
+        )
 
-    print("Creating products...")
+        db.add(market)
+        await db.commit()
+        await db.refresh(market)
 
-    iphone = Product(
-        marketId=market.marketId,
-        name="iPhone 15",
-        description="Apple smartphone",
-        category=ProductCategory.electronics,
-        price=1200,
-        available=100,
-        img="iphone.jpg"
-    )
+        print("Creating products...")
 
-    tv = Product(
-        marketId=market.marketId,
-        name="Samsung TV",
-        description="Smart TV 55 inch",
-        category=ProductCategory.electronics,
-        price=900,
-        available=40,
-        img="tv.jpg"
-    )
+        iphone = Product(
+            marketId=market.marketId,
+            name="iPhone 15",
+            description="Apple smartphone",
+            category=ProductCategory.electronics,
+            price=1200,
+            available=100,
+            img="iphone.jpg"
+        )
 
-    book = Product(
-        marketId=market.marketId,
-        name="Python Book",
-        description="Learn Python",
-        category=ProductCategory.books,
-        price=50,
-        available=200,
-        img="python.jpg"
-    )
+        tv = Product(
+            marketId=market.marketId,
+            name="Samsung TV",
+            description="Smart TV 55 inch",
+            category=ProductCategory.electronics,
+            price=900,
+            available=40,
+            img="tv.jpg"
+        )
 
-    db.add_all([iphone, tv, book])
-    db.commit()
+        book = Product(
+            marketId=market.marketId,
+            name="Python Book",
+            description="Learn Python",
+            category=ProductCategory.books,
+            price=50,
+            available=200,
+            img="python.jpg"
+        )
 
-    print("Creating orders...")
+        db.add_all([iphone, tv, book])
+        await db.commit()
 
-    order1 = Order(
-        marketId=market.marketId,
-        userId=buyer_id,
-        orderNumber="ORD-1001",
-        deliveryAddress="Amsterdam, Main Street 10",
-        totalAmount=2100,
-        status=OrderStatus.processing
-    )
+        await db.refresh(iphone)
+        await db.refresh(tv)
+        await db.refresh(book)
 
-    order2 = Order(
-        marketId=market.marketId,
-        userId=buyer_id,
-        orderNumber="ORD-1002",
-        deliveryAddress="Amsterdam, River Street 5",
-        totalAmount=900,
-        status=OrderStatus.pending
-    )
+        print("Creating orders...")
 
-    order3 = Order(
-        marketId=market.marketId,
-        userId=buyer_id,
-        orderNumber="ORD-1003",
-        deliveryAddress="Amsterdam, Flower Street 7",
-        totalAmount=50,
-        status=OrderStatus.completed
-    )
+        order1 = Order(
+            marketId=market.marketId,
+            userId=buyer_id,
+            orderNumber="ORD-1001",
+            deliveryAddress="Amsterdam, Main Street 10",
+            totalAmount=2100,
+            status=OrderStatus.processing
+        )
 
-    db.add_all([order1, order2, order3])
-    db.commit()
+        order2 = Order(
+            marketId=market.marketId,
+            userId=buyer_id,
+            orderNumber="ORD-1002",
+            deliveryAddress="Amsterdam, River Street 5",
+            totalAmount=900,
+            status=OrderStatus.pending
+        )
 
-    print("Creating order items...")
+        order3 = Order(
+            marketId=market.marketId,
+            userId=buyer_id,
+            orderNumber="ORD-1003",
+            deliveryAddress="Amsterdam, Flower Street 7",
+            totalAmount=50,
+            status=OrderStatus.completed
+        )
 
-    items = [
+        db.add_all([order1, order2, order3])
+        await db.commit()
 
-        OrderItem(
-            orderId=order1.id,
-            productId=iphone.id,
-            quantity=1,
-            price=1200
-        ),
+        await db.refresh(order1)
+        await db.refresh(order2)
+        await db.refresh(order3)
 
-        OrderItem(
-            orderId=order1.id,
-            productId=tv.id,
-            quantity=1,
-            price=900
-        ),
+        print("Creating order items...")
 
-        OrderItem(
-            orderId=order2.id,
-            productId=tv.id,
-            quantity=1,
-            price=900
-        ),
+        items = [
 
-        OrderItem(
-            orderId=order3.id,
-            productId=book.id,
-            quantity=1,
-            price=50
-        ),
-    ]
+            OrderItem(
+                orderId=order1.id,
+                productId=iphone.id,
+                quantity=1,
+                price=1200
+            ),
 
-    db.add_all(items)
-    db.commit()
+            OrderItem(
+                orderId=order1.id,
+                productId=tv.id,
+                quantity=1,
+                price=900
+            ),
 
-    print("Seed completed successfully")
+            OrderItem(
+                orderId=order2.id,
+                productId=tv.id,
+                quantity=1,
+                price=900
+            ),
 
-    print()
-    print("SELLER JWT TOKEN:")
-    print("--------------------------------------------------")
+            OrderItem(
+                orderId=order3.id,
+                productId=book.id,
+                quantity=1,
+                price=50
+            ),
+        ]
 
-    print("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-          "eyJ1c2VySWQiOiI5YmE0ZWUwMS0xODZlLTQ4YTgtYTYzOC1hNjgwNGQ0ZGVmODQiLCJpc1NlbGxlciI6dHJ1ZX0."
-          "aZRdraajXo4TDSsX_wQlu7XMeBGA081R7RfjZUzDf8U")
+        db.add_all(items)
+        await db.commit()
 
-    print("--------------------------------------------------")
+        print("Seed completed successfully")
+
+        print()
+        print("SELLER JWT TOKEN:")
+        print("--------------------------------------------------")
+
+        print(
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+            "eyJ1c2VySWQiOiI5YmE0ZWUwMS0xODZlLTQ4YTgtYTYzOC1hNjgwNGQ0ZGVmODQiLCJpc1NlbGxlciI6dHJ1ZX0."
+            "aZRdraajXo4TDSsX_wQlu7XMeBGA081R7RfjZUzDf8U"
+        )
+
+        print("--------------------------------------------------")
 
 
 if __name__ == "__main__":
-    seed()
+    asyncio.run(seed())
