@@ -1,23 +1,36 @@
-from sqlalchemy.orm import Session
-from app.models.market import Market
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from fastapi import HTTPException
 
+from app.models.market import Market
 
-def get_my_market(db: Session, user_id):
-    market = db.query(Market).filter(Market.userId == user_id).first()
+
+async def get_my_market(db: AsyncSession, user_id):
+
+    result = await db.execute(
+        select(Market).where(Market.userId == user_id)
+    )
+
+    market = result.scalars().first()
+
     return market
 
 
-def update_market(db: Session, user_id, data):
-    market = db.query(Market).filter(Market.userId == user_id).first()
+async def update_market(db: AsyncSession, user_id, data):
+
+    result = await db.execute(
+        select(Market).where(Market.userId == user_id)
+    )
+
+    market = result.scalars().first()
 
     if not market:
-        raise HTTPException(status_code=404, detail="Market not found")
+        raise HTTPException(404, "Market not found")
 
     market.marketName = data.marketName
     market.description = data.description
 
-    db.commit()
-    db.refresh(market)
+    await db.commit()
+    await db.refresh(market)
 
     return market

@@ -1,23 +1,22 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from app.database.session import SessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.session import AsyncSessionLocal
 from app.controllers.product_controller import *
 from app.schemas.product_schema import *
 from app.security.jwt_dependency import get_current_user
 
+
 router = APIRouter(prefix="/api/products", tags=["products"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
+async def get_db():
+    async with AsyncSessionLocal() as db:
         yield db
-    finally:
-        db.close()
 
 
 @router.get("/my")
-def my_products(
+async def my_products(
         page: int = 1,
         limit: int = 12,
         search: str | None = None,
@@ -25,10 +24,11 @@ def my_products(
         minPrice: float | None = None,
         maxPrice: float | None = None,
         available: bool | None = None,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
-    return get_my_products(
+
+    return await get_my_products(
         db=db,
         user_id=user["userId"],
         page=page,
@@ -42,31 +42,52 @@ def my_products(
 
 
 @router.post("/")
-def create(
+async def create(
         data: ProductCreate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
-    product = create_product(db, user["userId"], data)
-    return {"success": True, "productId": product.id}
+
+    product = await create_product(db, user["userId"], data)
+
+    return {
+        "success": True,
+        "productId": product.id
+    }
 
 
 @router.get("/{product_id}")
-def get_product_by_id(
+async def get_product_by_id(
         product_id: str,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
-    product = get_product(db, product_id, user["userId"])
+
+    product = await get_product(db, product_id, user["userId"])
+
     return product
 
 
 @router.patch("/{product_id}")
-def update_product_by_id(
+async def update_product_by_id(
         product_id: str,
         data: ProductUpdate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
-    update_product(db, product_id, user["userId"], data)
+
+    await update_product(db, product_id, user["userId"], data)
+
+    return {"success": True}
+
+
+@router.delete("/{product_id}")
+async def delete_product_by_id(
+        product_id: str,
+        db: AsyncSession = Depends(get_db),
+        user=Depends(get_current_user)
+):
+
+    await delete_product(db, product_id, user["userId"])
+
     return {"success": True}

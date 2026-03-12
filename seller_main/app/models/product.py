@@ -4,7 +4,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.database.base import Base
 from app.enums.product_category import ProductCategory
-
 # ======================================================
 # 4️⃣ Таблица products
 # ======================================================
@@ -21,8 +20,10 @@ class Product(Base):
 
     description = Column(String)
 
-    category = Column(Enum(ProductCategory), nullable=False)
-
+    category = Column(
+        Enum(ProductCategory, name="productcategory"),
+        nullable=False
+    )
     price = Column(Numeric(10,2), nullable=False)
 
     img = Column(String)
