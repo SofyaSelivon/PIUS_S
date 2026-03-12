@@ -1,24 +1,27 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.market import Market
-
+from sqlalchemy import select
 
 class UserRepository:
 
     @staticmethod
-    def get_by_login(db: Session, login: str):
-        return db.query(User).filter(User.login == login).first()
+    async def get_by_login(db: AsyncSession, login: str):
+        result = await db.execute(
+            select(User).filter(User.login == login)
+        )
+        return result.scalars().first()
 
     @staticmethod
-    def create_user(db: Session, user: User):
+    async def create_user(db: AsyncSession, user: User):
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
         return user
 
     @staticmethod
-    def create_market(db: Session, market: Market):
+    async def create_market(db: AsyncSession, market: Market):
         db.add(market)
-        db.commit()
-        db.refresh(market)
+        await db.commit()
+        await db.refresh(market)
         return market
