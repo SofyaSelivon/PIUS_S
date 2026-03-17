@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.routes.market_routes import router as market_router
 from app.routes.product_routes import router as product_router
 from fastapi.middleware.cors import CORSMiddleware
+import app.models
 
 app = FastAPI()
 

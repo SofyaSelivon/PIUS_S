@@ -5,7 +5,7 @@ from app.database.session import AsyncSessionLocal
 from app.controllers.product_controller import *
 from app.schemas.product_schema import *
 from app.security.jwt_dependency import get_current_user
-
+from uuid import UUID
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
@@ -41,7 +41,7 @@ async def my_products(
     )
 
 
-@router.post("/")
+@router.post("")
 async def create(
         data: ProductCreate,
         db: AsyncSession = Depends(get_db),
@@ -58,7 +58,7 @@ async def create(
 
 @router.get("/{product_id}")
 async def get_product_by_id(
-        product_id: str,
+        product_id: UUID,
         db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
