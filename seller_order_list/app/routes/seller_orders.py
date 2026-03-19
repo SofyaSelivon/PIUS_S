@@ -11,6 +11,7 @@ from app.deps import get_current_user
 
 from app.models.order import Order, OrderStatus
 from app.models.market import Market
+from app.models.order_item import OrderItem
 
 
 router = APIRouter(prefix="/api/seller/orders", tags=["seller"])
@@ -139,3 +140,56 @@ async def delete_order(
     await crud_order.soft_delete_order(db, order)
 
     return {"success": True}
+
+# =========================================
+# GET /api/seller/orders/{id}
+# =========================================
+@router.get("/{order_id}")
+async def get_order_by_id(
+        order_id: UUID = Path(...),
+        db: AsyncSession = Depends(get_db),
+        current_user=Depends(get_current_user)
+):
+    # 1. Находим market пользователя
+    result = await db.execute(
+        select(Market.marketId).where(
+            Market.userId == current_user["userId"]
+        )
+    )
+    market_id = result.scalar()
+
+    # 2. Ищем заказ
+    result = await db.execute(
+        select(Order).where(
+            Order.id == order_id,
+            Order.marketId == market_id,
+            Order.deletedAt.is_(None)
+        )
+    )
+    order = result.scalar()
+
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    # 3. Подгружаем items
+    result = await db.execute(
+        select(OrderItem).where(OrderItem.orderId == order.id)
+    )
+    items = result.scalars().all()
+
+    return {
+        "id": order.id,
+        "orderNumber": order.orderNumber,
+        "deliveryAddress": order.deliveryAddress,
+        "totalAmount": float(order.totalAmount),
+        "status": order.status,
+        "createdAt": order.createdAt,
+        "items": [
+            {
+                "productId": item.productId,
+                "quantity": item.quantity,
+                "price": float(item.price)
+            }
+            for item in items
+        ]
+    }
